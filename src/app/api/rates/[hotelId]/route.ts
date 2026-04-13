@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
-import * as fs from "fs";
-import * as path from "path";
+import fs14336 from "../../../../../data/14336.json";
+import fs415858 from "../../../../../data/415858.json";
+
+const rateFiles: Record<string, object> = {
+  "14336": fs14336,
+  "415858": fs415858,
+};
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ hotelId: string }> }
 ) {
   const { hotelId } = await params;
-  const filePath = path.join(process.cwd(), "data", `${hotelId}.json`);
+  const data = rateFiles[hotelId];
 
-  try {
-    const data = fs.readFileSync(filePath, "utf-8");
-    return NextResponse.json(JSON.parse(data));
-  } catch {
+  if (!data) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  return NextResponse.json(data);
 }
