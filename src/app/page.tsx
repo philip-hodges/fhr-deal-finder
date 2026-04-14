@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { TrendingDown, Calendar, BarChart3, Settings } from "lucide-react";
+import { motion } from "framer-motion";
+import { TrendingDown, Calendar, BarChart3, Settings, RefreshCw } from "lucide-react";
 import { HotelConfig, HotelRateData } from "@/lib/types";
 import { DateFilter, getDefaultFilter } from "@/lib/deals";
 import DealsTab from "@/components/DealsTab";
@@ -26,6 +26,7 @@ export default function Home() {
   const [rateData, setRateData] = useState<Record<string, HotelRateData>>({});
   const [selectedHotelId, setSelectedHotelId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState<Record<string, DateFilter>>({});
   const initializedRef = useRef(false);
 
@@ -69,6 +70,18 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }
+
+  // Compute most recent lastUpdated across all hotels
+  const lastUpdated = Object.values(rateData).reduce<string | null>((latest, rd) => {
+    if (!latest || rd.lastUpdated > latest) return rd.lastUpdated;
+    return latest;
+  }, null);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -92,6 +105,24 @@ export default function Home() {
         </div>
         <ThemeToggle />
       </header>
+
+      {/* Last updated bar */}
+      {lastUpdated && (
+        <div className="px-4 pb-2 flex items-center justify-between">
+          <p className="text-[10px] text-text-dim">
+            Data last updated: {new Date(lastUpdated).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+          </p>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors"
+            style={{ background: `rgba(var(--oc), 0.04)`, color: "var(--color-text-muted)" }}
+          >
+            <RefreshCw size={10} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto px-4 pb-24">
