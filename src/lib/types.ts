@@ -9,6 +9,8 @@ export interface HotelConfig {
   id: string;
   name: string;
   maxfhrId: string;
+  region: string;       // "Hawaii" | "Cabo"
+  island: string | null; // "Maui", "Oahu", etc. or null for Cabo
 }
 
 export interface StayDeal {

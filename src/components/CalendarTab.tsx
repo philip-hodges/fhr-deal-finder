@@ -6,7 +6,7 @@ import { X, ChevronDown } from "lucide-react";
 import { HotelConfig, HotelRateData } from "@/lib/types";
 import { computeCalendarRows, getColumnMinMax, DateFilter } from "@/lib/deals";
 import { getHeatTextColor, getHotelColor, getHotelPresets } from "@/lib/colors";
-import HotelSelector from "./HotelSelector";
+import HotelDropdown from "./HotelDropdown";
 import HeatCell from "./HeatCell";
 import StayBreakdown from "./StayBreakdown";
 import DateFilterControls from "./DateFilterControls";
@@ -113,7 +113,7 @@ export default function CalendarTab({ hotels, rateData, selectedHotelId, onSelec
 
   return (
     <div className="space-y-4">
-      <HotelSelector hotels={hotels} selectedId={selectedHotelId} onSelect={onSelectHotel} />
+      <HotelDropdown hotels={hotels} selectedId={selectedHotelId} onSelect={onSelectHotel} regionLabel={hotels[0]?.region || ""} />
 
       {/* Controls */}
       <DateFilterControls filter={filter} onChange={onFilterChange} presets={getHotelPresets(selectedHotelId)} />

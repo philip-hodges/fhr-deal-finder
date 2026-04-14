@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 import { HotelConfig, HotelRateData } from "@/lib/types";
 import { computeStayDeals, DateFilter } from "@/lib/deals";
 import { getHotelColor, getSectionColor, getHotelPresets } from "@/lib/colors";
-import HotelSelector from "./HotelSelector";
+import HotelDropdown from "./HotelDropdown";
 import DateFilterControls from "./DateFilterControls";
 
 interface PriceChartProps {
@@ -129,7 +129,7 @@ export default function PriceChart({ hotels, rateData, selectedHotelId, onSelect
 
   return (
     <div className="space-y-4">
-      <HotelSelector hotels={hotels} selectedId={selectedHotelId} onSelect={onSelectHotel} />
+      <HotelDropdown hotels={hotels} selectedId={selectedHotelId} onSelect={onSelectHotel} regionLabel={hotels[0]?.region || ""} />
 
       {/* Stay length selector */}
       <div className="flex flex-wrap items-center gap-2">
