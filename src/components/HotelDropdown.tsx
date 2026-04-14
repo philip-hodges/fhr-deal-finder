@@ -37,11 +37,11 @@ export default function HotelDropdown({ hotels, selectedId, onSelect, regionLabe
         >
           {hasIslands ? (
             islands.map((island) => (
-              <optgroup key={island} label={island}>
+              <optgroup key={island} label={island} style={{ background: "#fff", color: "#111" }}>
                 {hotels
                   .filter((h) => h.island === island)
                   .map((h) => (
-                    <option key={h.id} value={h.id}>
+                    <option key={h.id} value={h.id} style={{ background: "#fff", color: "#111" }}>
                       {h.name}
                     </option>
                   ))}
@@ -49,7 +49,7 @@ export default function HotelDropdown({ hotels, selectedId, onSelect, regionLabe
             ))
           ) : (
             hotels.map((h) => (
-              <option key={h.id} value={h.id}>
+              <option key={h.id} value={h.id} style={{ background: "#fff", color: "#111" }}>
                 {h.name}
               </option>
             ))
