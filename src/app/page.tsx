@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import { TrendingDown, Calendar, BarChart3, Settings, RefreshCw, Scale } from "lucide-react";
 import { HotelConfig, HotelRateData } from "@/lib/types";
 import { DateFilter, getDefaultFilter } from "@/lib/deals";
-import DealsTab from "@/components/DealsTab";
 import CalendarTab from "@/components/CalendarTab";
 import PriceChart from "@/components/PriceChart";
 import SettingsTab from "@/components/SettingsTab";
@@ -31,6 +30,7 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Two-panel state
+  const [mobileRegion, setMobileRegion] = useState<"Hawaii" | "Cabo">("Hawaii");
   const [hawaiiHotelId, setHawaiiHotelId] = useState("14336");
   const [caboHotelId, setCaboHotelId] = useState("415858");
   const [hawaiiFilter, setHawaiiFilter] = useState<DateFilter>(getDefaultFilter(6));
@@ -103,16 +103,24 @@ export default function Home() {
 
   const hasData = Object.keys(rateData).length > 0;
 
-  // Shared props for two-panel tabs
-  const panelProps = {
-    hawaiiHotels, caboHotels, rateData,
-    hawaiiHotelId, caboHotelId,
-    onSelectHawaii: setHawaiiHotelId,
-    onSelectCabo: setCaboHotelId,
-    hawaiiFilter, caboFilter,
-    onHawaiiFilterChange: setHawaiiFilter,
-    onCaboFilterChange: setCaboFilter,
-  };
+  const regionToggle = (
+    <div className="flex items-center gap-1.5 mb-3 md:hidden">
+      {(["Hawaii", "Cabo"] as const).map((r) => (
+        <button
+          key={r}
+          onClick={() => setMobileRegion(r)}
+          className="flex-1 px-3 py-1.5 rounded-xl text-xs font-medium text-center transition-all"
+          style={{
+            background: mobileRegion === r ? `rgba(var(--oc), 0.08)` : `rgba(var(--oc), 0.03)`,
+            border: `1px solid ${mobileRegion === r ? `rgba(var(--oc), 0.15)` : `rgba(var(--oc), 0.06)`}`,
+            color: mobileRegion === r ? "var(--color-text)" : "var(--color-text-dim)",
+          }}
+        >
+          {r}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-screen">
@@ -159,49 +167,47 @@ export default function Home() {
           </div>
         ) : (
           <div>
-            {activeTab === "deals" && <DealsTab {...panelProps} />}
+            {activeTab === "deals" && (
+              <>
+                {regionToggle}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className={`${mobileRegion !== "Hawaii" ? "hidden md:block" : ""}`}>
+                    <HotelPanel regionLabel="Hawaii" hotels={hawaiiHotels} rateData={rateData} selectedId={hawaiiHotelId} onSelectHotel={setHawaiiHotelId} filter={hawaiiFilter} onFilterChange={setHawaiiFilter} />
+                  </div>
+                  <div className={`${mobileRegion !== "Cabo" ? "hidden md:block" : ""}`}>
+                    <HotelPanel regionLabel="Cabo" hotels={caboHotels} rateData={rateData} selectedId={caboHotelId} onSelectHotel={setCaboHotelId} filter={caboFilter} onFilterChange={setCaboFilter} />
+                  </div>
+                </div>
+              </>
+            )}
             {activeTab === "compare" && (
               <CompareTab hawaiiHotels={hawaiiHotels} caboHotels={caboHotels} rateData={rateData} />
             )}
             {activeTab === "chart" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <PriceChart
-                  hotels={hawaiiHotels}
-                  rateData={rateData}
-                  selectedHotelId={hawaiiHotelId}
-                  onSelectHotel={setHawaiiHotelId}
-                  filter={hawaiiFilter}
-                  onFilterChange={setHawaiiFilter}
-                />
-                <PriceChart
-                  hotels={caboHotels}
-                  rateData={rateData}
-                  selectedHotelId={caboHotelId}
-                  onSelectHotel={setCaboHotelId}
-                  filter={caboFilter}
-                  onFilterChange={setCaboFilter}
-                />
-              </div>
+              <>
+                {regionToggle}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className={`${mobileRegion !== "Hawaii" ? "hidden md:block" : ""}`}>
+                    <PriceChart hotels={hawaiiHotels} rateData={rateData} selectedHotelId={hawaiiHotelId} onSelectHotel={setHawaiiHotelId} filter={hawaiiFilter} onFilterChange={setHawaiiFilter} />
+                  </div>
+                  <div className={`${mobileRegion !== "Cabo" ? "hidden md:block" : ""}`}>
+                    <PriceChart hotels={caboHotels} rateData={rateData} selectedHotelId={caboHotelId} onSelectHotel={setCaboHotelId} filter={caboFilter} onFilterChange={setCaboFilter} />
+                  </div>
+                </div>
+              </>
             )}
             {activeTab === "calendar" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <CalendarTab
-                  hotels={hawaiiHotels}
-                  rateData={rateData}
-                  selectedHotelId={hawaiiHotelId}
-                  onSelectHotel={setHawaiiHotelId}
-                  filter={hawaiiFilter}
-                  onFilterChange={setHawaiiFilter}
-                />
-                <CalendarTab
-                  hotels={caboHotels}
-                  rateData={rateData}
-                  selectedHotelId={caboHotelId}
-                  onSelectHotel={setCaboHotelId}
-                  filter={caboFilter}
-                  onFilterChange={setCaboFilter}
-                />
-              </div>
+              <>
+                {regionToggle}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className={`${mobileRegion !== "Hawaii" ? "hidden md:block" : ""}`}>
+                    <CalendarTab hotels={hawaiiHotels} rateData={rateData} selectedHotelId={hawaiiHotelId} onSelectHotel={setHawaiiHotelId} filter={hawaiiFilter} onFilterChange={setHawaiiFilter} />
+                  </div>
+                  <div className={`${mobileRegion !== "Cabo" ? "hidden md:block" : ""}`}>
+                    <CalendarTab hotels={caboHotels} rateData={rateData} selectedHotelId={caboHotelId} onSelectHotel={setCaboHotelId} filter={caboFilter} onFilterChange={setCaboFilter} />
+                  </div>
+                </div>
+              </>
             )}
             {activeTab === "settings" && (
               <SettingsTab hotels={hotels} rateData={rateData} onRefresh={fetchData} />

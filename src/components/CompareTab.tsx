@@ -55,6 +55,7 @@ export default function CompareTab({ hawaiiHotels, caboHotels, rateData }: Compa
   const [showCustomNights, setShowCustomNights] = useState(false);
   const [customInput, setCustomInput] = useState("");
   const [expandedHotel, setExpandedHotel] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"discount" | "price">("discount");
 
   // Month picker
   const now = new Date();
@@ -113,10 +114,14 @@ export default function CompareTab({ hawaiiHotels, caboHotels, rateData }: Compa
       });
     }
 
-    // Sort by discount (most negative = biggest deal first)
-    results.sort((a, b) => a.discountPct - b.discountPct);
+    // Sort based on user preference
+    if (sortBy === "discount") {
+      results.sort((a, b) => a.discountPct - b.discountPct);
+    } else {
+      results.sort((a, b) => a.bestAvgPerNight - b.bestAvgPerNight);
+    }
     return results;
-  }, [hotels, rateData, nights, weekendOnly, monthFilter, selectedMonth]);
+  }, [hotels, rateData, nights, weekendOnly, monthFilter, selectedMonth, sortBy]);
 
   return (
     <div className="space-y-4">
@@ -214,12 +219,27 @@ export default function CompareTab({ hawaiiHotels, caboHotels, rateData }: Compa
         </div>
       </div>
 
-      {/* Results header */}
+      {/* Results header + sort toggle */}
       <div className="flex items-center justify-between">
         <p className="tracking-wider text-[9px] uppercase text-text-dim">
           {region} — {selectedMonth.label} — {nights}N {weekendOnly ? "(Fri+Sat)" : ""} — {hotelDeals.length} hotels
         </p>
-        <p className="text-[9px] text-text-dim">sorted by best value</p>
+        <div className="flex items-center gap-1">
+          {(["discount", "price"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSortBy(s)}
+              className="px-2 py-0.5 rounded text-[9px] font-medium transition-all"
+              style={{
+                background: sortBy === s ? `rgba(var(--oc), 0.08)` : `rgba(var(--oc), 0.03)`,
+                border: `1px solid ${sortBy === s ? `rgba(var(--oc), 0.15)` : `rgba(var(--oc), 0.06)`}`,
+                color: sortBy === s ? "var(--color-text)" : "var(--color-text-dim)",
+              }}
+            >
+              {s === "discount" ? "Best value" : "Lowest price"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Hotel comparison cards */}
