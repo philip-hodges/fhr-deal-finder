@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Hotel, ExternalLink, Github, Clock } from "lucide-react";
+import { Hotel, ExternalLink, GitBranch, Clock } from "lucide-react";
 import { HotelConfig, HotelRateData } from "@/lib/types";
 import { getHotelColor } from "@/lib/colors";
 
@@ -119,7 +119,7 @@ export default function SettingsTab({ hotels, rateData }: SettingsTabProps) {
             className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
             style={{ background: "rgba(16, 185, 129, 0.15)", color: "#34d399" }}
           >
-            <Github size={12} />
+            <GitBranch size={12} />
             View GitHub Actions
           </a>
         </div>
