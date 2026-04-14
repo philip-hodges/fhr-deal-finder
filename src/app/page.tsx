@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
-import { TrendingDown, Calendar, BarChart3, Settings, RefreshCw } from "lucide-react";
+import { TrendingDown, Calendar, BarChart3, Settings, RefreshCw, Scale } from "lucide-react";
 import { HotelConfig, HotelRateData } from "@/lib/types";
 import { DateFilter, getDefaultFilter } from "@/lib/deals";
 import DealsTab from "@/components/DealsTab";
@@ -11,9 +11,11 @@ import PriceChart from "@/components/PriceChart";
 import SettingsTab from "@/components/SettingsTab";
 import ThemeToggle from "@/components/ThemeToggle";
 import HotelPanel from "@/components/HotelPanel";
+import CompareTab from "@/components/CompareTab";
 
 const tabs = [
   { id: "deals", label: "Deals", icon: TrendingDown },
+  { id: "compare", label: "Compare", icon: Scale },
   { id: "chart", label: "Chart", icon: BarChart3 },
   { id: "calendar", label: "Calendar", icon: Calendar },
   { id: "settings", label: "Settings", icon: Settings },
@@ -158,6 +160,9 @@ export default function Home() {
         ) : (
           <div>
             {activeTab === "deals" && <DealsTab {...panelProps} />}
+            {activeTab === "compare" && (
+              <CompareTab hawaiiHotels={hawaiiHotels} caboHotels={caboHotels} rateData={rateData} />
+            )}
             {activeTab === "chart" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <PriceChart
