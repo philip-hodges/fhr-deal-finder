@@ -42,11 +42,18 @@ export interface PresetExclusion {
   endDay: number;
 }
 
-const HOTEL_PRESETS: Record<string, PresetExclusion[]> = {
-  "415858": [
-    { label: "Hurricane season", startMonth: 6, startDay: 1, endMonth: 10, endDay: 31 },
-  ],
+const CABO_HURRICANE_PRESET: PresetExclusion = {
+  label: "Hurricane season", startMonth: 6, startDay: 1, endMonth: 10, endDay: 31,
 };
+
+const CABO_IDS = [
+  "415858", "874700", "16118058", "41895", "21136644", "2256238",
+  "21565893", "33899743", "35813119", "15407425", "53084454",
+];
+
+const HOTEL_PRESETS: Record<string, PresetExclusion[]> = Object.fromEntries(
+  CABO_IDS.map((id) => [id, [CABO_HURRICANE_PRESET]])
+);
 
 export function getHotelPresets(hotelId: string): PresetExclusion[] {
   return HOTEL_PRESETS[hotelId] || [];
