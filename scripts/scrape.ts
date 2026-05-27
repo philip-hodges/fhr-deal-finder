@@ -16,7 +16,64 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-async function scrapeHotel(hotelConfig: HotelConfig) {
+interface MonthData {
+  day: number;
+  price: number | null;
+}
+
+async function extractMonthData(page: import("playwright").Page): Promise<MonthData[]> {
+  return await page.evaluate(() => {
+    const results: { day: number; price: number | null }[] = [];
+    const bodyText = document.body.innerText;
+    const calStart = bodyText.indexOf("Sunday");
+    if (calStart === -1) return results;
+    const afterHeaders = bodyText.indexOf("Saturday", calStart);
+    if (afterHeaders === -1) return results;
+    const calEnd = bodyText.indexOf("Disclaimer", afterHeaders);
+    const calText = calEnd > -1
+      ? bodyText.substring(afterHeaders + "Saturday".length, calEnd)
+      : bodyText.substring(afterHeaders + "Saturday".length, afterHeaders + 5000);
+
+    const lines = calText.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const dayNum = parseInt(line);
+      if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 31) {
+        let price: number | null = null;
+        let found = false;
+        for (let j = 1; j <= 3 && i + j < lines.length; j++) {
+          const nextLine = lines[i + j];
+          if (nextLine === "Not Available" || nextLine.startsWith("Not")) {
+            price = null;
+            found = true;
+            break;
+          }
+          const priceNum = parseInt(nextLine.replace(/,/g, ""));
+          if (!isNaN(priceNum) && priceNum >= 50 && priceNum <= 99999) {
+            price = priceNum;
+            found = true;
+            break;
+          }
+        }
+        if (found || dayNum <= 31) {
+          results.push({ day: dayNum, price: found ? price : null });
+        }
+      }
+      i++;
+    }
+    const seen = new Map<number, { day: number; price: number | null }>();
+    for (const item of results) {
+      const existing = seen.get(item.day);
+      if (!existing || (existing.price === null && item.price !== null)) {
+        seen.set(item.day, item);
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) => a.day - b.day);
+  });
+}
+
+async function scrapeHotel(hotelConfig: HotelConfig): Promise<Record<string, number | null>> {
   console.log(`\n--- Scraping: ${hotelConfig.name} (ID: ${hotelConfig.maxfhrId}) ---`);
 
   const browser = await chromium.launch({ headless: true });
@@ -27,7 +84,7 @@ async function scrapeHotel(hotelConfig: HotelConfig) {
   });
   const page = await context.newPage();
 
-  // Block ads and tracking to speed up loading
+  // Block ads to speed up loading
   await page.route("**/*doubleclick*", (route) => route.abort());
   await page.route("**/*googlesyndication*", (route) => route.abort());
   await page.route("**/*google-analytics*", (route) => route.abort());
@@ -41,7 +98,6 @@ async function scrapeHotel(hotelConfig: HotelConfig) {
   await page.route("**/*turn.com*", (route) => route.abort());
 
   const rates: Record<string, number | null> = {};
-  let hotelName = hotelConfig.name;
 
   try {
     await page.goto(`https://www.maxfhr.com/hotel/${hotelConfig.maxfhrId}`, {
@@ -49,10 +105,26 @@ async function scrapeHotel(hotelConfig: HotelConfig) {
       timeout: 60000,
     });
 
-    // Wait for React app to hydrate and calendar to render
-    await page.waitForTimeout(6000);
+    // Wait for the calendar to actually render — look for "Sunday" in body text
+    // (instead of a fixed timeout that may be too short on slow runners)
+    const calendarLoaded = await page
+      .waitForFunction(() => {
+        const text = document.body.innerText;
+        return text.includes("Sunday") && text.includes("Saturday") && text.length > 500;
+      }, { timeout: 30000 })
+      .then(() => true)
+      .catch(() => false);
 
-    // Determine the current month/year displayed
+    if (!calendarLoaded) {
+      console.log(`  ⚠️ Calendar did not render. Page text length: ${(await page.evaluate(() => document.body.innerText.length))}`);
+      const sample = await page.evaluate(() => document.body.innerText.substring(0, 400));
+      console.log(`  Page text sample: ${sample.replace(/\n/g, " | ")}`);
+      throw new Error("Calendar failed to render");
+    }
+
+    // Extra time for React to fully hydrate
+    await page.waitForTimeout(3000);
+
     const now = new Date();
     let currentMonth = now.getMonth();
     let currentYear = now.getFullYear();
@@ -61,82 +133,15 @@ async function scrapeHotel(hotelConfig: HotelConfig) {
       const monthName = MONTH_NAMES[currentMonth];
       console.log(`  Scraping ${monthName} ${currentYear}...`);
 
-      // Use a robust extraction: get full page text, then parse the calendar section
-      const monthData = await page.evaluate((expectedMonth: string) => {
-        const results: { day: number; price: number | null }[] = [];
+      // Try extraction up to 3 times with increasing waits
+      let monthData: MonthData[] = [];
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        monthData = await extractMonthData(page);
+        if (monthData.length > 0) break;
+        console.log(`    Attempt ${attempt}: got 0 days, retrying after ${attempt * 2}s...`);
+        await page.waitForTimeout(attempt * 2000);
+      }
 
-        // Strategy: Find all elements that look like calendar day cells
-        // Each cell typically has: day number, and either a price or "Not Available"
-        // The cells are in a grid pattern after "Sunday Monday Tuesday..."
-
-        // Get the full body text to find the calendar section
-        const bodyText = document.body.innerText;
-
-        // Find the calendar section - starts after "Sunday" header row
-        const calStart = bodyText.indexOf("Sunday");
-        if (calStart === -1) return results;
-
-        // Find the section between "Saturday" (end of headers) and "Disclaimer"
-        const afterHeaders = bodyText.indexOf("Saturday", calStart);
-        if (afterHeaders === -1) return results;
-
-        const calEnd = bodyText.indexOf("Disclaimer", afterHeaders);
-        const calText = calEnd > -1
-          ? bodyText.substring(afterHeaders + "Saturday".length, calEnd)
-          : bodyText.substring(afterHeaders + "Saturday".length, afterHeaders + 5000);
-
-        // Parse the calendar text line by line
-        const lines = calText.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
-
-        let i = 0;
-        while (i < lines.length) {
-          const line = lines[i];
-
-          // Check if this line is a day number (1-31)
-          const dayNum = parseInt(line);
-          if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 31) {
-            // Look at the next few lines for price or "Not Available"
-            let price: number | null = null;
-            let found = false;
-
-            for (let j = 1; j <= 3 && i + j < lines.length; j++) {
-              const nextLine = lines[i + j];
-              if (nextLine === "Not Available" || nextLine.startsWith("Not")) {
-                price = null;
-                found = true;
-                break;
-              }
-              // Check if it's a price (3-5 digit number)
-              const priceNum = parseInt(nextLine.replace(/,/g, ""));
-              if (!isNaN(priceNum) && priceNum >= 50 && priceNum <= 99999) {
-                price = priceNum;
-                found = true;
-                break;
-              }
-            }
-
-            if (found || dayNum <= 31) {
-              results.push({ day: dayNum, price: found ? price : null });
-            }
-            i++;
-          } else {
-            i++;
-          }
-        }
-
-        // Deduplicate: if we got duplicate day numbers, keep the one with a price
-        const seen = new Map<number, { day: number; price: number | null }>();
-        for (const item of results) {
-          const existing = seen.get(item.day);
-          if (!existing || (existing.price === null && item.price !== null)) {
-            seen.set(item.day, item);
-          }
-        }
-
-        return Array.from(seen.values()).sort((a, b) => a.day - b.day);
-      }, monthName);
-
-      // Store the rates
       for (const { day, price } of monthData) {
         const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         rates[dateStr] = price;
@@ -144,11 +149,8 @@ async function scrapeHotel(hotelConfig: HotelConfig) {
 
       console.log(`    Found ${monthData.length} days, ${monthData.filter((d) => d.price !== null).length} with prices`);
 
-      // Navigate to next month
       if (m < MONTHS_TO_SCRAPE - 1) {
-        // Try multiple selectors for the next month button
         const nextClicked = await page.evaluate(() => {
-          // Look for ">" or "Next Month" button
           const buttons = document.querySelectorAll("button");
           for (const btn of buttons) {
             const label = btn.getAttribute("aria-label") || "";
@@ -168,7 +170,8 @@ async function scrapeHotel(hotelConfig: HotelConfig) {
           break;
         }
 
-        await page.waitForTimeout(2000);
+        // Wait longer between month transitions on slow runners
+        await page.waitForTimeout(3000);
 
         currentMonth++;
         if (currentMonth > 11) {
@@ -178,22 +181,12 @@ async function scrapeHotel(hotelConfig: HotelConfig) {
       }
     }
   } catch (error) {
-    console.error(`  Error scraping ${hotelConfig.name}:`, error);
+    console.error(`  ❌ Error scraping ${hotelConfig.name}:`, error instanceof Error ? error.message : error);
   } finally {
     await browser.close();
   }
 
-  // Write data - use the config name (more reliable than scraping the page title)
-  const output = {
-    hotelId: hotelConfig.id,
-    hotelName: hotelConfig.name,
-    lastUpdated: new Date().toISOString(),
-    rates,
-  };
-
-  const filePath = path.join(DATA_DIR, `${hotelConfig.id}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(output, null, 2));
-  console.log(`  Saved ${Object.keys(rates).length} dates to ${filePath}`);
+  return rates;
 }
 
 async function main() {
@@ -210,11 +203,53 @@ async function main() {
   const hotels: HotelConfig[] = JSON.parse(fs.readFileSync(hotelsPath, "utf-8"));
   console.log(`Found ${hotels.length} hotels to scrape`);
 
+  let totalSaved = 0;
+  let totalSkipped = 0;
+
   for (const hotel of hotels) {
-    await scrapeHotel(hotel);
+    const filePath = path.join(DATA_DIR, `${hotel.id}.json`);
+    const rates = await scrapeHotel(hotel);
+    const pricesCount = Object.values(rates).filter((v) => v !== null).length;
+
+    // SAFETY GUARD: Don't overwrite existing data with empty/bad scrape results.
+    // Many hotels legitimately have no upcoming data (e.g. Sensei Lana'i is always empty),
+    // but for those we'd still have 0 prices. The key difference: a successful scrape
+    // returns 365+ dates total (even if all null), a failed one returns nothing.
+    const datesCount = Object.keys(rates).length;
+    const MIN_DATES_THRESHOLD = 30;
+
+    if (datesCount < MIN_DATES_THRESHOLD && fs.existsSync(filePath)) {
+      const existing = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      const existingDates = Object.keys(existing.rates || {}).length;
+      if (existingDates > MIN_DATES_THRESHOLD) {
+        console.log(`  ⚠️ Skipping write: scrape returned only ${datesCount} dates (existing has ${existingDates}). Keeping existing data.`);
+        totalSkipped++;
+        continue;
+      }
+    }
+
+    const output = {
+      hotelId: hotel.id,
+      hotelName: hotel.name,
+      lastUpdated: new Date().toISOString(),
+      rates,
+    };
+
+    fs.writeFileSync(filePath, JSON.stringify(output, null, 2));
+    console.log(`  ✓ Saved ${datesCount} dates (${pricesCount} with prices) to ${filePath}`);
+    totalSaved++;
   }
 
-  console.log("\nDone!");
+  console.log(`\nDone! Saved: ${totalSaved}, Skipped (kept existing): ${totalSkipped}`);
+
+  // Fail the workflow if too many hotels failed
+  if (totalSkipped > hotels.length / 2) {
+    console.error(`\n❌ Too many failed scrapes (${totalSkipped}/${hotels.length}). Failing workflow.`);
+    process.exit(1);
+  }
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
