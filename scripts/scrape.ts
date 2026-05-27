@@ -25,39 +25,61 @@ async function extractMonthData(page: import("playwright").Page): Promise<MonthD
   return await page.evaluate(() => {
     const results: { day: number; price: number | null }[] = [];
     const bodyText = document.body.innerText;
-    const calStart = bodyText.indexOf("Sunday");
+    // MaxFHR uses abbreviated day headers: "Sun Mon Tue Wed Thu Fri Sat"
+    const calStart = bodyText.indexOf("Sun\n");
     if (calStart === -1) return results;
-    const afterHeaders = bodyText.indexOf("Saturday", calStart);
-    if (afterHeaders === -1) return results;
+    // Find the last "Sat" header before any day numbers
+    const satIdx = bodyText.indexOf("Sat\n", calStart);
+    if (satIdx === -1) return results;
+    const afterHeaders = satIdx + "Sat\n".length;
     const calEnd = bodyText.indexOf("Disclaimer", afterHeaders);
     const calText = calEnd > -1
-      ? bodyText.substring(afterHeaders + "Saturday".length, calEnd)
-      : bodyText.substring(afterHeaders + "Saturday".length, afterHeaders + 5000);
+      ? bodyText.substring(afterHeaders, calEnd)
+      : bodyText.substring(afterHeaders, afterHeaders + 5000);
 
     const lines = calText.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
     let i = 0;
     while (i < lines.length) {
       const line = lines[i];
       const dayNum = parseInt(line);
-      if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 31) {
+      if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 31 && line === String(dayNum)) {
         let price: number | null = null;
         let found = false;
+        // Look at next few lines for price ($XXX) or "Not Available"
         for (let j = 1; j <= 3 && i + j < lines.length; j++) {
           const nextLine = lines[i + j];
+          // Stop if we hit another day number (means this day had no price)
+          const nextAsDay = parseInt(nextLine);
+          if (nextLine === String(nextAsDay) && !isNaN(nextAsDay) && nextAsDay >= 1 && nextAsDay <= 31) {
+            break;
+          }
           if (nextLine === "Not Available" || nextLine.startsWith("Not")) {
             price = null;
             found = true;
             break;
           }
+          // New MaxFHR format uses "$925" (with dollar sign)
+          const dollarMatch = nextLine.match(/^\$([\d,]+)$/);
+          if (dollarMatch) {
+            const priceNum = parseInt(dollarMatch[1].replace(/,/g, ""));
+            if (priceNum >= 50 && priceNum <= 99999) {
+              price = priceNum;
+              found = true;
+              break;
+            }
+          }
+          // Old format fallback: plain number
           const priceNum = parseInt(nextLine.replace(/,/g, ""));
-          if (!isNaN(priceNum) && priceNum >= 50 && priceNum <= 99999) {
+          if (!isNaN(priceNum) && nextLine === String(priceNum) && priceNum >= 100 && priceNum <= 99999) {
             price = priceNum;
             found = true;
             break;
           }
         }
-        if (found || dayNum <= 31) {
-          results.push({ day: dayNum, price: found ? price : null });
+        // Only record days where we found a price OR Not Available
+        // Don't record blank past dates
+        if (found) {
+          results.push({ day: dayNum, price });
         }
       }
       i++;
@@ -110,7 +132,8 @@ async function scrapeHotel(hotelConfig: HotelConfig): Promise<Record<string, num
     const calendarLoaded = await page
       .waitForFunction(() => {
         const text = document.body.innerText;
-        return text.includes("Sunday") && text.includes("Saturday") && text.length > 500;
+        // New MaxFHR format uses abbreviated headers: "Sun Mon Tue Wed Thu Fri Sat"
+        return text.includes("Sun\n") && text.includes("Sat\n") && text.length > 500;
       }, { timeout: 30000 })
       .then(() => true)
       .catch(() => false);
@@ -153,9 +176,9 @@ async function scrapeHotel(hotelConfig: HotelConfig): Promise<Record<string, num
         const nextClicked = await page.evaluate(() => {
           const buttons = document.querySelectorAll("button");
           for (const btn of buttons) {
-            const label = btn.getAttribute("aria-label") || "";
+            const label = (btn.getAttribute("aria-label") || "").toLowerCase();
             const text = btn.textContent?.trim() || "";
-            if (label === "Next Month" || text === ">" || label.toLowerCase().includes("next")) {
+            if (label === "next month" || label.includes("next") || text === ">") {
               if (!(btn as HTMLButtonElement).disabled) {
                 (btn as HTMLButtonElement).click();
                 return true;
