@@ -56,14 +56,10 @@ export default function HotelPanel({
         regionLabel={regionLabel}
       />
 
-      {/* Hotel name gradient */}
+      {/* Hotel name */}
       <h2
-        className="text-lg font-bold truncate"
-        style={{
-          background: `linear-gradient(135deg, ${hotelColor.light}, ${hotelColor.primary})`,
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-        }}
+        className="text-lg font-bold leading-tight"
+        style={{ color: hotelColor.light }}
       >
         {hotelName}
       </h2>
